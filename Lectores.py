@@ -12,10 +12,15 @@ def PrintCsv(ruta_archivo): # ruta_archivo debe ser un str
     print(df.head())  # Muestra las primeras 5 filas
 
 def ReadTxt(ruta_archivo):
-    ruta_completa = f"data/mitbih_database/{ruta_archivo}.txt"
+    try:
+        ruta_completa = f"data/mitbih_database/{ruta_archivo}.txt"
 
-    with open(ruta_completa, "r", encoding="utf-8") as archivo:
-        lineas = archivo.readlines()
+        with open(ruta_completa, "r", encoding="utf-8") as archivo:
+            lineas = archivo.readlines()
+
+    except FileNotFoundError: # Si no encuentro el archivo
+        print(f"El archivo {ruta_archivo}.txt no existe.")
+        return None
 
     datos = []
     for linea in lineas[1:]:
@@ -32,5 +37,9 @@ def ReadTxt(ruta_archivo):
     return df
 
 def ReadCsv(ruta_archivo):
-    df = pd.read_csv(f"data/mitbih_database/{ruta_archivo}.csv")
-    return df
+    try:
+        df = pd.read_csv(f"data/mitbih_database/{ruta_archivo}.csv")
+        return df
+    except FileNotFoundError: # Si no encuentro el archivo
+        print(f"El archivo {ruta_archivo}.csv no existe.")
+        return None
