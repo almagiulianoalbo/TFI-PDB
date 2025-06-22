@@ -1,5 +1,7 @@
 # Lectoras
-from Lectores import ReadCsv, ReadTxt
+from numpy import ndarray
+
+from ECG.util.lectores import ReadCsv, ReadTxt
 
 # Modulos
 from ECG.Annotations import Annotations
@@ -29,6 +31,7 @@ class EstudioECG:
 
         self.frecuencia = self.calcularFrecuenciaCardiaca() # BPM
         self.frecuenciaMuestreo = 360 # Hz
+        self.ventanaEstimada = self.estimar_ventana(int(self.frecuencia))
 
     def CargarEstudio(self) -> None:
         csv = ReadCsv(self.estudio)
@@ -82,7 +85,7 @@ class EstudioECG:
 
         return round(frecuencia, 2)
 
-    def detectarLatidosMaxRelativos(self) -> None | list:
+    def detectarLatidosMaxRelativos(self) -> None | ndarray:
         """
         Funcion que detecta latidos maximos relativos
         Realiza el analisis considerando secuencias MLII, V5 o V6 (signal/canal 1)
@@ -95,13 +98,11 @@ class EstudioECG:
             return None     # Ignoro otros casos
 
         latidos = []
-        ventana = self.estimar_ventana(bpm_max=int(self.frecuencia))
-        print(f"Ventana estimada para este estudio: {ventana}\n")
         print(f"CARGANDO...\n")
 
         # Seteo el intervalo
         for i in range(0, len(self.muestras)):
-            entorno = self.muestras[i - ventana : i + ventana + 1]
+            entorno = self.muestras[i - self.ventanaEstimada : i + self.ventanaEstimada + 1]
 
             # Busco el maximo del intervalo
             maximo = 0
@@ -112,6 +113,7 @@ class EstudioECG:
             if self.muestras[i].signal1 == maximo:
                 latidos.append(i)
 
+        latidos = np.array(latidos)
         return latidos
 
     def detectarLatidosSleepECG(self):
@@ -207,10 +209,10 @@ class EstudioECG:
             max_distance = int(0.1 * fs)  # 100ms de tolerancia
         )
 
-        print(f"Comparación de latidos (SleepECG vs Anotaciones)")
-        print(f"Verdaderos positivos: {len(true_positives)}")
-        print(f"Falsos positivos: {len(false_positives)}")
-        print(f"Falsos negativos: {len(false_negatives)}\n")
+        print(f"- Comparación de latidos (SleepECG vs Anotaciones)")
+        print(f"- Verdaderos positivos: {len(true_positives)}")
+        print(f"- Falsos positivos: {len(false_positives)}")
+        print(f"- Falsos negativos: {len(false_negatives)}\n")
 
     # Pulsos: N / A
 
@@ -321,7 +323,7 @@ class EstudioECG:
         if anotacion.numero_samples not in samples_anormales:
             tipo_pulso = 'normal'
 
-        pulso = Pulso(signals, n, tipo_pulso, ventana=self.estimar_ventana(int(self.frecuencia)))
+        pulso = Pulso(signals, n, tipo_pulso, None, self.ventanaEstimada)
 
         # Graficos
         pulso.graficar_original()
@@ -334,7 +336,9 @@ class EstudioECG:
     def estimar_ventana(self, bpm_max: int = 180) -> int:
         segundos_entre_latidos = 60 / bpm_max
         muestras_entre_latidos = segundos_entre_latidos * self.frecuenciaMuestreo
-        return int(muestras_entre_latidos / 2)
+        ventana = int(muestras_entre_latidos / 2)
+        print(f"Ventana estimada para este estudio: {ventana}\n")
+        return ventana
 
     def __repr__(self):
         if self.cargado is False:
