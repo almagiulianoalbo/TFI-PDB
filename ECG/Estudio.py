@@ -1,11 +1,15 @@
+# Lectoras
+from Lectores import ReadCsv, ReadTxt
+
+# Modulos
 from ECG.Annotations import Annotations
 from ECG.Registro import Registro
-from Lectores import ReadCsv, ReadTxt
 from ECG.auxiliares import convertir_a_segundos
+
+# Librerias
 import sleepecg
 import numpy as np
 import matplotlib.pyplot as plt
-
 
 
 # Crear Clase
@@ -151,30 +155,31 @@ class EstudioECG:
         signal = np.array(signal)
         total_muestras = len(signal)
 
-        i_ini = int(segundo_inicio * self.frecuenciaMuestreo)
-        i_fin = int((segundo_inicio + segundos) * self.frecuenciaMuestreo)
+        inicio_muestra = int(segundo_inicio * self.frecuenciaMuestreo)
+        fin_muestra = int((segundo_inicio + segundos) * self.frecuenciaMuestreo)
 
-        if i_fin > total_muestras:
-            i_fin = total_muestras
-        if i_ini >= total_muestras:
+        if inicio_muestra + segundos > total_muestras:
+            fin_muestra = total_muestras
+        if inicio_muestra >= total_muestras:
             print("Inicio fuera del rango.")
             return
 
-        signal_corta = signal[i_ini:i_fin]
-
-        # Detectar latidos en la señal completa
+        signal_corta = signal[inicio_muestra:fin_muestra]
         latidos = self.detectarLatidosSleepECG()
 
-        # Filtrar latidos dentro del tramo y ajustar posición relativa
-        latidos_visibles = [i - i_ini for i in latidos if i_ini <= i < i_fin]
+        latidos_visibles = []
+        for i in latidos:                   # Filtrar latidos
+            if inicio_muestra <= i < fin_muestra:
+                latidos_visibles.append(i - fin_muestra)
 
-        # Grafico
         sleepecg.plot_ecg(
             ecg = signal_corta,
             fs = self.frecuenciaMuestreo,
             rpeaks = np.array(latidos_visibles),
             title = f"Latidos entre {segundo_inicio}s y {segundo_inicio + segundos}s"
         )
+        plt.xlabel("Tiempo (s)")
+        plt.ylabel("Voltage (mV)")
         plt.show()
 
     # 2)
@@ -187,9 +192,13 @@ class EstudioECG:
             print("Estudio no cargado.")
             return
 
-        fs = 360
+        fs = self.frecuenciaMuestreo
         latidos_detectados = self.detectarLatidosSleepECG()
-        latidos_reales = [int(convertir_a_segundos(a.time) * fs) for a in self.annotations]
+
+        latidos_reales = []
+        for anotacion in self.annotations:
+            if anotacion.type == 'N':
+                latidos_reales.remove(int(convertir_a_segundos(anotacion.time) * fs))
 
         true_positives, false_positives, false_negatives = sleepecg.compare_heartbeats(
             detection = np.array(latidos_detectados),
@@ -197,11 +206,10 @@ class EstudioECG:
             max_distance = int(0.1 * fs)  # 100ms de tolerancia
         )
 
-        print(f"🔎 Comparación de latidos (SleepECG vs Anotaciones)")
-        print(f"✔️ Verdaderos positivos: {len(true_positives)}")
-        print(f"❌ Falsos positivos: {len(false_positives)}")
-        print(f"⚠️ Falsos negativos: {len(false_negatives)}")
-
+        print(f"Comparación de latidos (SleepECG vs Anotaciones)")
+        print(f"Verdaderos positivos: {len(true_positives)}")
+        print(f"Falsos positivos: {len(false_positives)}")
+        print(f"Falsos negativos: {len(false_negatives)}\n")
 
     # Pulsos: N / A
 
@@ -224,15 +232,19 @@ class EstudioECG:
                     'segundo': convertir_a_segundos(anotacion.time)
                 })
 
-        if mostrar:
-            print(f"Se encontraron {len(latidos_anormales)} pulsos anormales:\n")
-            for latido in latidos_anormales:
-                muestra = latido['muestra']
+        if not mostrar:
+            return latidos_anormales
 
-                if muestra < 100: muestra = f'{muestra}  '
-                else: f'{muestra}'
+        print(f"Se encontraron {len(latidos_anormales)} pulsos anormales:\n")
 
-                print(f" - Tipo: {latido['tipo']}\t| Muestra: {muestra} \t| Tiempo: {latido['segundo']:.2f} s")
+        for latido in latidos_anormales:
+            muestra = latido['muestra']
+
+            if muestra < 100: muestra = f'{muestra}  '
+            else: f'{muestra}'
+
+            print(f" - Tipo: {latido['tipo']}\t| Muestra: {muestra} \t| Tiempo: {latido['segundo']:.2f} s")
+        print(" ")
 
         return latidos_anormales
 
@@ -245,30 +257,41 @@ class EstudioECG:
             print("Estudio no cargado.")
             return
 
-        signal = []
-        for r in self.muestras:
-            signal.append(r.signal1)
+        inicio_muestra = int(inicio_segundos * self.frecuenciaMuestreo)
+        fin_muestra = int((inicio_segundos + duracion_segundos) * self.frecuenciaMuestreo)
 
-        # Buscar latidos anormales dentro del intervalo
+        if fin_muestra > len(self.muestras):
+            fin_muestra = len(self.muestras)
+
+        fin_tiempo = fin_muestra / self.frecuenciaMuestreo
+
+        signal = []
+        for registro in self.muestras[inicio_muestra : fin_muestra]:
+            signal.append(registro.signal1)
+
         latidos_anormales = self.detectarPulsosAnormales(mostrar=False)
         latidos_anormales_sample = []
+
         for latido in latidos_anormales:
-            latidos_anormales_sample.append(latido['muestra'])
+            if inicio_muestra <= latido['muestra'] < fin_muestra:
+                latidos_anormales_sample.append(latido['muestra']-inicio_muestra)
 
         if not latidos_anormales:
             print("No hay latidos anormales en este intervalo.")
         else:
-            print(f"Latidos anormales encontrados: {len(latidos_anormales)}")
+            print(f"Latidos anormales totales encontrados: {len(latidos_anormales)}")
 
         # Graficar
         sleepecg.plot_ecg(
             ecg = np.array(signal),
-            fs = self.frecuenciaMuestreo,
-            
-            rpeaks3 = np.array(latidos_anormales_sample),
-            title = f"Latidos anormales entre {inicio_segundos}s y {inicio_segundos + duracion_segundos}s"
+            fs = self.frecuenciaMuestreo * 60,
+            rpeaks3 = np.array(latidos_anormales_sample, dtype=int),
+            title = f"Latidos anormales entre {int(inicio_segundos/60)}min y {int(fin_tiempo/60)}min"
         )
+        plt.xlabel("Tiempo (mins)")
+        plt.ylabel("Voltage (mV)")
         plt.show()
+        plt.close()
 
     def estimar_ventana(self, bpm_max: int = 180) -> int:
         segundos_entre_latidos = 60 / bpm_max
