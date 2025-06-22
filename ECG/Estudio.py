@@ -4,7 +4,8 @@ from Lectores import ReadCsv, ReadTxt
 # Modulos
 from ECG.Annotations import Annotations
 from ECG.Registro import Registro
-from ECG.auxiliares import convertir_a_segundos
+from ECG.util.auxiliares import convertir_a_segundos
+from ECG.Pulso import Pulso
 
 # Librerias
 import sleepecg
@@ -198,7 +199,7 @@ class EstudioECG:
         latidos_reales = []
         for anotacion in self.annotations:
             if anotacion.type == 'N':
-                latidos_reales.remove(int(convertir_a_segundos(anotacion.time) * fs))
+                latidos_reales.append(int(convertir_a_segundos(anotacion.time) * fs))
 
         true_positives, false_positives, false_negatives = sleepecg.compare_heartbeats(
             detection = np.array(latidos_detectados),
@@ -292,6 +293,43 @@ class EstudioECG:
         plt.ylabel("Voltage (mV)")
         plt.show()
         plt.close()
+
+    def analizarAnnotation(self, n: int) -> None:
+        """
+        Para una anotacion, identifica si es un pulso Normal o Anormal y grafica (rojo/azul) segun la condicion.
+
+        :param n: Indice de la Anotación
+        :return: None
+        """
+
+        if not self.cargado:
+            print("Estudio no cargado.")
+            return None
+
+        anotacion: Annotations = self.annotations[n]    # Tomo indice
+        signals: list[Registro] = []                    # Crea la signal
+        for muestras in self.muestras:
+            signals.append(muestras.signal1)
+
+        latidos_anormales = self.detectarPulsosAnormales(mostrar=False)
+        samples_anormales = []
+
+        for latido in latidos_anormales:
+            samples_anormales.append(latido['muestra'])
+
+        tipo_pulso = 'anormal'
+        if anotacion.numero_samples not in samples_anormales:
+            tipo_pulso = 'normal'
+
+        pulso = Pulso(signals, n, tipo_pulso, ventana=self.estimar_ventana(int(self.frecuencia)))
+
+        # Graficos
+        pulso.graficar_original()
+        pulso.normalizar()
+        pulso.graficar_normalizado()
+        pulso.suavizar(ancho_ventana=5)
+        pulso.graficar_suavizado()
+        return None
 
     def estimar_ventana(self, bpm_max: int = 180) -> int:
         segundos_entre_latidos = 60 / bpm_max
