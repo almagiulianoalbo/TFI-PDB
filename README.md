@@ -41,4 +41,11 @@ El desarrollo se apoya en un [`Notebook principal`](./TFI.ipynb) para el anális
 - Librería de detección de ECG (según el método elegido):
   - `sleepecg`
   
+---
 
+## 🙌 Agradecimientos
+
+Gracias por tomarse el tiempo de leer este trabajo!
+Este proyecto fue desarrollado como parte del Trabajo Final Integrador de la materia,
+con el objetivo de aplicar conceptos de procesamiento de señales biomédicas
+sobre datos reales de electrocardiograma.
